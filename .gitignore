@@ -3,7 +3,9 @@
 !.env.example
 .pytest_cache/
 .ruff_cache/
+.coverage
 .venv/
+.vercel/
 .worktrees/
 __pycache__/
 *.py[cod]
