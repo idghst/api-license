@@ -110,6 +110,9 @@ def test_cors_rejects_wildcard() -> None:
         "http://localhost:3000?preview=true",
         "http://localhost:3000#section",
         "http:///missing-host",
+        "http://localhost\\evil.com",
+        "http://localhost:",
+        "http://.",
         " http://localhost:3000",
         "http://localhost:3000 ",
         "",
@@ -135,12 +138,33 @@ def test_cors_allows_local_http_origin() -> None:
 
 
 @pytest.mark.parametrize(
+    "cors_origin",
+    [
+        "http://127.0.0.1:8000",
+        "http://[::1]:8000",
+        "https://api.example.com:8443",
+    ],
+)
+def test_cors_allows_concrete_origins(cors_origin: str) -> None:
+    settings = Settings(
+        CORS_ORIGINS=[cors_origin],
+        SUPABASE_URL="https://test.supabase.co",
+        SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+    )
+
+    assert settings.CORS_ORIGINS == [cors_origin]
+
+
+@pytest.mark.parametrize(
     "supabase_url",
     [
         "https://user:password@test.supabase.co",
         "https://test.supabase.co/rest/v1",
         "https://test.supabase.co?preview=true",
         "https://test.supabase.co#section",
+        "https://test.supabase.co\\evil.com",
+        "https://test.supabase.co:",
+        "https://.",
     ],
 )
 def test_supabase_url_rejects_non_origin_values(supabase_url: str) -> None:
