@@ -1,8 +1,36 @@
 from functools import lru_cache
 from typing import Annotated, ClassVar, Literal
+from urllib.parse import urlsplit
 
 from pydantic import AnyHttpUrl, Field, SecretStr, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _require_http_origin(value: object, *, allow_root_path: bool) -> str:
+    if not isinstance(value, str) or not value or any(char.isspace() for char in value):
+        raise ValueError("must be a concrete HTTP(S) origin")
+
+    parsed = urlsplit(value)
+    try:
+        port = parsed.port
+    except ValueError as error:
+        raise ValueError("must use a valid port") from error
+
+    valid_path = not parsed.path or (allow_root_path and parsed.path == "/")
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or port is not None
+        and not 0 < port <= 65535
+        or not valid_path
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("must be a concrete HTTP(S) origin")
+    return value
 
 
 class Settings(BaseSettings):
@@ -25,9 +53,12 @@ class Settings(BaseSettings):
     @field_validator("CORS_ORIGINS")
     @classmethod
     def require_concrete_cors_origins(cls, values: list[str]) -> list[str]:
-        if "*" in values:
-            raise ValueError("CORS_ORIGINS must not include '*'")
-        return values
+        return [_require_http_origin(value, allow_root_path=False) for value in values]
+
+    @field_validator("SUPABASE_URL", mode="before")
+    @classmethod
+    def require_supabase_origin(cls, value: object) -> object:
+        return _require_http_origin(value, allow_root_path=True)
 
     @field_validator("SUPABASE_URL")
     @classmethod

@@ -99,6 +99,58 @@ def test_cors_rejects_wildcard() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "cors_origin",
+    [
+        "null",
+        "ftp://localhost:3000",
+        "http://user:password@localhost:3000",
+        "http://localhost:3000/api",
+        "http://localhost:3000/",
+        "http://localhost:3000?preview=true",
+        "http://localhost:3000#section",
+        "http:///missing-host",
+        " http://localhost:3000",
+        "http://localhost:3000 ",
+        "",
+    ],
+)
+def test_cors_rejects_non_origin_values(cors_origin: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            CORS_ORIGINS=[cors_origin],
+            SUPABASE_URL="https://test.supabase.co",
+            SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+        )
+
+
+def test_cors_allows_local_http_origin() -> None:
+    settings = Settings(
+        CORS_ORIGINS=["http://localhost:3000"],
+        SUPABASE_URL="https://test.supabase.co",
+        SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+    )
+
+    assert settings.CORS_ORIGINS == ["http://localhost:3000"]
+
+
+@pytest.mark.parametrize(
+    "supabase_url",
+    [
+        "https://user:password@test.supabase.co",
+        "https://test.supabase.co/rest/v1",
+        "https://test.supabase.co?preview=true",
+        "https://test.supabase.co#section",
+    ],
+)
+def test_supabase_url_rejects_non_origin_values(supabase_url: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            SUPABASE_URL=supabase_url,
+            SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+        )
+
+
 def test_publishable_key_must_not_be_blank() -> None:
     with pytest.raises(ValidationError):
         Settings(
