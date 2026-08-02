@@ -193,6 +193,25 @@ def test_blank_optional_secret_becomes_none() -> None:
     assert settings.SUPABASE_SECRET_KEY is None
 
 
+def test_secret_client_rejects_a_publishable_key() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            SUPABASE_URL="https://test.supabase.co",
+            SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+            SUPABASE_SECRET_KEY="sb_publishable_not-a-server-key",
+        )
+
+
+def test_blank_admin_api_key_becomes_none() -> None:
+    settings = Settings(
+        SUPABASE_URL="https://test.supabase.co",
+        SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+        ADMIN_API_KEY="   ",
+    )
+
+    assert settings.ADMIN_API_KEY is None
+
+
 def test_settings_cache_can_be_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
     clear_settings_cache()
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")

@@ -162,3 +162,20 @@ def test_cors_allows_only_configured_origin(settings: Settings) -> None:
 
     assert allowed.headers["access-control-allow-origin"] == "https://app.example.com"
     assert denied.status_code == 400
+
+
+def test_cors_allows_the_admin_key_header(settings: Settings) -> None:
+    settings.CORS_ORIGINS = ["https://app.example.com"]
+    client = TestClient(create_app(settings))
+
+    response = client.options(
+        "/api/v1/licenses",
+        headers={
+            "Origin": "https://app.example.com",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "X-Admin-Key",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "x-admin-key" in response.headers["access-control-allow-headers"].lower()

@@ -31,3 +31,26 @@ def test_license_migration_limits_default_privileges_to_service_role() -> None:
     assert "grant execute on routines to service_role;" in migration
     assert "grant all on tables to anon" not in migration
     assert "grant all on tables to authenticated" not in migration
+
+
+def test_license_records_migration_keeps_records_private_to_the_server() -> None:
+    migrations = sorted(
+        (PROJECT_ROOT / "supabase" / "migrations").glob("*_create_license_records.sql")
+    )
+
+    assert len(migrations) == 1
+    migration = migrations[0].read_text(encoding="utf-8")
+
+    assert "create table license.licenses" in migration
+    assert "alter table license.licenses enable row level security;" in migration
+    assert "revoke usage on schema license from anon, authenticated;" in migration
+    assert (
+        "revoke all privileges on table license.licenses from anon, authenticated;"
+        in migration
+    )
+    assert (
+        "grant select, insert, update, delete on table license.licenses to service_role;"
+        in migration
+    )
+    assert "total_seats >= 1" in migration
+    assert "used_seats <= total_seats" in migration

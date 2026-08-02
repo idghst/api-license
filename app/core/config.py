@@ -106,6 +106,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: AnyHttpUrl
     SUPABASE_PUBLISHABLE_KEY: SecretStr
     SUPABASE_SECRET_KEY: SecretStr | None = None
+    ADMIN_API_KEY: SecretStr | None = None
     SUPABASE_TIMEOUT_SECONDS: Annotated[float, Field(gt=0)] = 5.0
 
     app_name: ClassVar[str] = "License API"
@@ -141,6 +142,23 @@ class Settings(BaseSettings):
     @field_validator("SUPABASE_SECRET_KEY", mode="before")
     @classmethod
     def normalize_blank_secret_key(cls, value: object) -> object:
+        raw_value = value.get_secret_value() if isinstance(value, SecretStr) else value
+        if isinstance(raw_value, str) and not raw_value.strip():
+            return None
+        return value
+
+    @field_validator("SUPABASE_SECRET_KEY")
+    @classmethod
+    def require_non_publishable_secret_key(
+        cls, value: SecretStr | None
+    ) -> SecretStr | None:
+        if value is not None and value.get_secret_value().startswith("sb_publishable_"):
+            raise ValueError("SUPABASE_SECRET_KEY must not use a publishable key")
+        return value
+
+    @field_validator("ADMIN_API_KEY", mode="before")
+    @classmethod
+    def normalize_blank_admin_api_key(cls, value: object) -> object:
         raw_value = value.get_secret_value() if isinstance(value, SecretStr) else value
         if isinstance(raw_value, str) and not raw_value.strip():
             return None
