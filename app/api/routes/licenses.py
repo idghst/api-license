@@ -2,6 +2,7 @@ import hmac
 from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import APIRouter, Depends, Header, Response
@@ -15,6 +16,27 @@ from app.integrations.supabase import get_admin_client
 from supabase import AsyncClient
 
 router = APIRouter(prefix="/licenses", tags=["licenses"])
+
+LicenseStatus = Literal["active", "expiring", "expired", "inactive"]
+
+_KST = ZoneInfo("Asia/Seoul")
+_EXPIRING_SOON_DAYS = 30
+
+
+def calculate_license_status(
+    expires_at: date | None, *, today: date | None = None
+) -> LicenseStatus:
+    """Return the read-only license status from its expiry date in KST."""
+    if expires_at is None:
+        return "inactive"
+
+    reference_date = today or datetime.now(_KST).date()
+    days_until_expiry = (expires_at - reference_date).days
+    if days_until_expiry < 0:
+        return "expired"
+    if days_until_expiry <= _EXPIRING_SOON_DAYS:
+        return "expiring"
+    return "active"
 
 
 def _camel_case(name: str) -> str:
@@ -33,18 +55,20 @@ class LicenseRecord(BaseModel):
     start_date: date | None
     expires_at: date | None
     renewal_date: date | None
-    status: str
+    status: LicenseStatus
     memo: str | None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def set_automatic_status(self) -> "LicenseRecord":
+        self.status = calculate_license_status(self.expires_at)
+        return self
 
 
 class LicenseList(BaseModel):
     items: list[LicenseRecord]
     count: int
-
-
-LicenseStatus = Literal["active", "expiring", "expired", "inactive"]
 
 
 class LicenseCreate(BaseModel):
@@ -62,7 +86,6 @@ class LicenseCreate(BaseModel):
     start_date: date | None = None
     expires_at: date | None = None
     renewal_date: date | None = None
-    status: LicenseStatus = "active"
     memo: Annotated[str | None, Field(max_length=5_000)] = None
 
     @model_validator(mode="after")
@@ -89,7 +112,6 @@ class LicensePatch(BaseModel):
     start_date: date | None = None
     expires_at: date | None = None
     renewal_date: date | None = None
-    status: LicenseStatus | None = None
     memo: Annotated[str | None, Field(max_length=5_000)] = None
 
     @model_validator(mode="after")

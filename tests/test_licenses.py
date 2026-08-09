@@ -1,8 +1,10 @@
+from datetime import date
 from typing import Any
 
 import httpx
 from fastapi.testclient import TestClient
 
+from app.api.routes.licenses import calculate_license_status
 from app.core.config import Settings
 from app.main import create_app
 
@@ -147,7 +149,6 @@ def valid_license_payload() -> dict[str, object]:
         "startDate": "2026-01-01",
         "expiresAt": "2027-01-01",
         "renewalDate": "2026-12-15",
-        "status": "active",
         "memo": "Design team",
     }
 
@@ -188,9 +189,9 @@ def test_list_licenses_returns_admin_records_in_camel_case() -> None:
                 "total_seats": 12,
                 "used_seats": 8,
                 "start_date": "2026-01-01",
-                "expires_at": "2027-01-01",
+                "expires_at": "2099-01-01",
                 "renewal_date": "2026-12-15",
-                "status": "active",
+                "status": "expired",
                 "memo": "Design team",
                 "created_at": "2026-01-01T00:00:00+00:00",
                 "updated_at": "2026-01-02T00:00:00+00:00",
@@ -216,7 +217,7 @@ def test_list_licenses_returns_admin_records_in_camel_case() -> None:
                 "totalSeats": 12,
                 "usedSeats": 8,
                 "startDate": "2026-01-01",
-                "expiresAt": "2027-01-01",
+                "expiresAt": "2099-01-01",
                 "renewalDate": "2026-12-15",
                 "status": "active",
                 "memo": "Design team",
@@ -317,7 +318,6 @@ def test_create_license_persists_a_validated_record() -> None:
             "startDate": "2026-01-01",
             "expiresAt": "2027-01-01",
             "renewalDate": "2026-12-15",
-            "status": "active",
             "memo": "Design team",
         },
     )
@@ -333,7 +333,6 @@ def test_create_license_persists_a_validated_record() -> None:
         "start_date": "2026-01-01",
         "expires_at": "2027-01-01",
         "renewal_date": "2026-12-15",
-        "status": "active",
         "memo": "Design team",
     }
 
@@ -428,7 +427,7 @@ def test_create_license_rejects_expiration_before_the_start_date() -> None:
     assert admin_client.query.inserted is None
 
 
-def test_create_license_rejects_unknown_status() -> None:
+def test_create_license_rejects_manually_supplied_status() -> None:
     from app.integrations.supabase import get_admin_client
 
     app = create_app(
@@ -446,7 +445,7 @@ def test_create_license_rejects_unknown_status() -> None:
 
     app.dependency_overrides[get_admin_client] = provide_admin_client
     payload = valid_license_payload()
-    payload["status"] = "unknown"
+    payload["status"] = "active"
     response = TestClient(app).post(
         "/api/v1/licenses",
         headers={"X-Admin-Key": "admin-test-key"},
@@ -456,6 +455,16 @@ def test_create_license_rejects_unknown_status() -> None:
     assert response.status_code == 422
     assert response.json()["code"] == "validation_error"
     assert admin_client.query.inserted is None
+
+
+def test_calculate_license_status_uses_kst_day_boundaries() -> None:
+    today = date(2026, 8, 10)
+
+    assert calculate_license_status(None, today=today) == "inactive"
+    assert calculate_license_status(date(2026, 8, 9), today=today) == "expired"
+    assert calculate_license_status(date(2026, 8, 10), today=today) == "expiring"
+    assert calculate_license_status(date(2026, 9, 9), today=today) == "expiring"
+    assert calculate_license_status(date(2026, 9, 10), today=today) == "active"
 
 
 def test_patch_license_validates_against_the_existing_record() -> None:
@@ -501,6 +510,34 @@ def test_patch_license_validates_against_the_existing_record() -> None:
     assert admin_client.query.updated is not None
     assert admin_client.query.updated["used_seats"] == 9
     assert isinstance(admin_client.query.updated["updated_at"], str)
+
+
+def test_patch_license_rejects_manually_supplied_status() -> None:
+    from app.integrations.supabase import get_admin_client
+
+    app = create_app(
+        Settings(
+            SUPABASE_URL="https://test.supabase.co",
+            SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+            SUPABASE_SECRET_KEY="sb_secret_test",
+            ADMIN_API_KEY="admin-test-key",
+        )
+    )
+    admin_client = FakePatchClient([], [])
+
+    async def provide_admin_client():
+        yield admin_client
+
+    app.dependency_overrides[get_admin_client] = provide_admin_client
+    response = TestClient(app).patch(
+        "/api/v1/licenses/f8f121d4-1f2f-4bd7-85fb-71543800bf0f",
+        headers={"X-Admin-Key": "admin-test-key"},
+        json={"status": "expired"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+    assert admin_client.query.updated is None
 
 
 def test_delete_license_returns_no_content_after_a_successful_delete() -> None:

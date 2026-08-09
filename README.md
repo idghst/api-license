@@ -104,8 +104,10 @@ curl -i \
 
 레코드는 `id`, `productName`, `vendor`, `totalSeats`, `usedSeats`, `startDate`,
 `expiresAt`, `renewalDate`, `status`, `memo`, `createdAt`, `updatedAt`을 사용합니다.
-`status`는 `active`, `expiring`, `expired`, `inactive` 중 하나입니다. `usedSeats`는
-`totalSeats`를 초과할 수 없고, `expiresAt`은 `startDate`보다 앞설 수 없습니다.
+응답의 `status`는 KST 오늘 날짜와 `expiresAt`으로 자동 계산하며, 생성·수정 요청에서
+받지 않습니다. 만료일이 없으면 `inactive`, 지난 경우 `expired`, 30일 이내면
+`expiring`, 그 외에는 `active`입니다. `usedSeats`는 `totalSeats`를 초과할 수 없고,
+`expiresAt`은 `startDate`보다 앞설 수 없습니다.
 
 `licenseKey`는 의도적으로 지원하지 않습니다. 평문 또는 암호문 모두 DB/API에 저장·
 반환하지 않으며, 해당 필드를 보내면 `422 validation_error`를 반환합니다. 나중에 키
