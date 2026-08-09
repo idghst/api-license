@@ -54,3 +54,25 @@ def test_license_records_migration_keeps_records_private_to_the_server() -> None
     )
     assert "total_seats >= 1" in migration
     assert "used_seats <= total_seats" in migration
+
+
+def test_license_contacts_migration_extracts_legacy_memo_fields() -> None:
+    migrations = sorted(
+        (PROJECT_ROOT / "supabase" / "migrations").glob(
+            "*_add_license_contacts_contract_and_configuration.sql"
+        )
+    )
+
+    assert len(migrations) == 1
+    migration = migrations[0].read_text(encoding="utf-8")
+
+    assert "add column partnership_contact" in migration
+    assert "add column business_contact" in migration
+    assert "add column contract_contact" in migration
+    assert "add column license_configuration" in migration
+    assert r"\[제휴 담당자\]" in migration
+    assert r"\[사업 담당자\]" in migration
+    assert r"\[계약 담당자\]" in migration
+    assert r"\[계약 만료일\]" in migration
+    assert r"\[라이선스 구성\]" in migration
+    assert r"\[기존 상태 코드\]" in migration

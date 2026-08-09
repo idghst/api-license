@@ -219,6 +219,10 @@ def test_list_licenses_returns_admin_records_in_camel_case() -> None:
                 "startDate": "2026-01-01",
                 "expiresAt": "2099-01-01",
                 "renewalDate": "2026-12-15",
+                "partnershipContact": None,
+                "businessContact": None,
+                "contractContact": None,
+                "licenseConfiguration": None,
                 "status": "active",
                 "memo": "Design team",
                 "createdAt": "2026-01-01T00:00:00Z",
@@ -334,6 +338,82 @@ def test_create_license_persists_a_validated_record() -> None:
         "expires_at": "2027-01-01",
         "renewal_date": "2026-12-15",
         "memo": "Design team",
+    }
+
+
+def test_create_license_persists_structured_contacts_and_configuration() -> None:
+    from app.integrations.supabase import get_admin_client
+
+    app = create_app(
+        Settings(
+            SUPABASE_URL="https://test.supabase.co",
+            SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+            SUPABASE_SECRET_KEY="sb_secret_test",
+            ADMIN_API_KEY="admin-test-key",
+        )
+    )
+    admin_client = FakeInsertClient(
+        [
+            {
+                "id": "f8f121d4-1f2f-4bd7-85fb-71543800bf0f",
+                "product_name": "Figma",
+                "vendor": "Figma, Inc.",
+                "total_seats": 12,
+                "used_seats": 8,
+                "start_date": "2026-01-01",
+                "expires_at": "2027-01-01",
+                "renewal_date": "2026-12-15",
+                "partnership_contact": "부산은행 정종원 대리",
+                "business_contact": "BNK시스템 표기동 매니저",
+                "contract_contact": "BNK시스템 이성욱 파트너",
+                "license_configuration": "[내부망]\n- 디자이너: 20EA",
+                "status": "active",
+                "memo": None,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-01T00:00:00+00:00",
+            }
+        ]
+    )
+
+    async def provide_admin_client():
+        yield admin_client
+
+    app.dependency_overrides[get_admin_client] = provide_admin_client
+    response = TestClient(app).post(
+        "/api/v1/licenses",
+        headers={"X-Admin-Key": "admin-test-key"},
+        json={
+            "productName": "Figma",
+            "vendor": "Figma, Inc.",
+            "totalSeats": 12,
+            "usedSeats": 8,
+            "startDate": "2026-01-01",
+            "expiresAt": "2027-01-01",
+            "renewalDate": "2026-12-15",
+            "partnershipContact": "부산은행 정종원 대리",
+            "businessContact": "BNK시스템 표기동 매니저",
+            "contractContact": "BNK시스템 이성욱 파트너",
+            "licenseConfiguration": "[내부망]\n- 디자이너: 20EA",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["partnershipContact"] == "부산은행 정종원 대리"
+    assert response.json()["businessContact"] == "BNK시스템 표기동 매니저"
+    assert response.json()["contractContact"] == "BNK시스템 이성욱 파트너"
+    assert response.json()["licenseConfiguration"] == "[내부망]\n- 디자이너: 20EA"
+    assert admin_client.query.inserted == {
+        "product_name": "Figma",
+        "vendor": "Figma, Inc.",
+        "total_seats": 12,
+        "used_seats": 8,
+        "start_date": "2026-01-01",
+        "expires_at": "2027-01-01",
+        "renewal_date": "2026-12-15",
+        "partnership_contact": "부산은행 정종원 대리",
+        "business_contact": "BNK시스템 표기동 매니저",
+        "contract_contact": "BNK시스템 이성욱 파트너",
+        "license_configuration": "[내부망]\n- 디자이너: 20EA",
     }
 
 
@@ -510,6 +590,54 @@ def test_patch_license_validates_against_the_existing_record() -> None:
     assert admin_client.query.updated is not None
     assert admin_client.query.updated["used_seats"] == 9
     assert isinstance(admin_client.query.updated["updated_at"], str)
+
+
+def test_patch_license_persists_a_structured_contact() -> None:
+    from app.integrations.supabase import get_admin_client
+
+    app = create_app(
+        Settings(
+            SUPABASE_URL="https://test.supabase.co",
+            SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+            SUPABASE_SECRET_KEY="sb_secret_test",
+            ADMIN_API_KEY="admin-test-key",
+        )
+    )
+    existing = {
+        "id": "f8f121d4-1f2f-4bd7-85fb-71543800bf0f",
+        "product_name": "Figma",
+        "vendor": "Figma, Inc.",
+        "total_seats": 12,
+        "used_seats": 8,
+        "start_date": "2026-01-01",
+        "expires_at": "2027-01-01",
+        "renewal_date": "2026-12-15",
+        "status": "active",
+        "memo": None,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+    }
+    updated = {
+        **existing,
+        "contract_contact": "BNK시스템 이성욱 파트너",
+        "updated_at": "2026-02-01T00:00:00+00:00",
+    }
+    admin_client = FakePatchClient([existing], [updated])
+
+    async def provide_admin_client():
+        yield admin_client
+
+    app.dependency_overrides[get_admin_client] = provide_admin_client
+    response = TestClient(app).patch(
+        "/api/v1/licenses/f8f121d4-1f2f-4bd7-85fb-71543800bf0f",
+        headers={"X-Admin-Key": "admin-test-key"},
+        json={"contractContact": "BNK시스템 이성욱 파트너"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["contractContact"] == "BNK시스템 이성욱 파트너"
+    assert admin_client.query.updated is not None
+    assert admin_client.query.updated["contract_contact"] == "BNK시스템 이성욱 파트너"
 
 
 def test_patch_license_rejects_manually_supplied_status() -> None:

@@ -103,7 +103,10 @@ curl -i \
 | `DELETE` | `/api/v1/licenses/{id}` | `204 No Content` |
 
 레코드는 `id`, `productName`, `vendor`, `totalSeats`, `usedSeats`, `startDate`,
-`expiresAt`, `renewalDate`, `status`, `memo`, `createdAt`, `updatedAt`을 사용합니다.
+`expiresAt`(계약 만료일), `renewalDate`, `partnershipContact`, `businessContact`,
+`contractContact`, `licenseConfiguration`, `status`, `createdAt`, `updatedAt`을
+사용합니다. 기존 `memo`는 레거시 호환을 위해서만 반환하며, 관리 화면은 담당자와
+라이선스 구성을 각각의 독립 필드로 저장합니다.
 응답의 `status`는 KST 오늘 날짜와 `expiresAt`으로 자동 계산하며, 생성·수정 요청에서
 받지 않습니다. 만료일이 없으면 `inactive`, 지난 경우 `expired`, 30일 이내면
 `expiring`, 그 외에는 `active`입니다. `usedSeats`는 `totalSeats`를 초과할 수 없고,

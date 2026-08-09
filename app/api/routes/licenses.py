@@ -55,6 +55,10 @@ class LicenseRecord(BaseModel):
     start_date: date | None
     expires_at: date | None
     renewal_date: date | None
+    partnership_contact: str | None = None
+    business_contact: str | None = None
+    contract_contact: str | None = None
+    license_configuration: str | None = None
     status: LicenseStatus
     memo: str | None
     created_at: datetime
@@ -86,6 +90,10 @@ class LicenseCreate(BaseModel):
     start_date: date | None = None
     expires_at: date | None = None
     renewal_date: date | None = None
+    partnership_contact: Annotated[str | None, Field(max_length=200)] = None
+    business_contact: Annotated[str | None, Field(max_length=200)] = None
+    contract_contact: Annotated[str | None, Field(max_length=200)] = None
+    license_configuration: Annotated[str | None, Field(max_length=5_000)] = None
     memo: Annotated[str | None, Field(max_length=5_000)] = None
 
     @model_validator(mode="after")
@@ -112,6 +120,10 @@ class LicensePatch(BaseModel):
     start_date: date | None = None
     expires_at: date | None = None
     renewal_date: date | None = None
+    partnership_contact: Annotated[str | None, Field(max_length=200)] = None
+    business_contact: Annotated[str | None, Field(max_length=200)] = None
+    contract_contact: Annotated[str | None, Field(max_length=200)] = None
+    license_configuration: Annotated[str | None, Field(max_length=5_000)] = None
     memo: Annotated[str | None, Field(max_length=5_000)] = None
 
     @model_validator(mode="after")
@@ -172,7 +184,7 @@ async def create_license(
     try:
         response = await (
             client.table("license_records")
-            .insert(license_input.model_dump(mode="json"))
+            .insert(license_input.model_dump(mode="json", exclude_none=True))
             .execute()
         )
     except (APIError, httpx.HTTPError) as error:
