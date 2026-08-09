@@ -41,7 +41,7 @@ class FakeAdminClient:
         self.response = FakeResponse(data)
 
     def table(self, name: str) -> FakeSelectQuery:
-        assert name == "licenses"
+        assert name == "license_records"
         return FakeSelectQuery(self.response)
 
 
@@ -63,7 +63,7 @@ class FakeInsertClient:
         self.query = FakeInsertQuery(FakeResponse(data))
 
     def table(self, name: str) -> FakeInsertQuery:
-        assert name == "licenses"
+        assert name == "license_records"
         return self.query
 
 
@@ -102,7 +102,7 @@ class FakePatchClient:
         self.query = FakePatchQuery(existing, updated)
 
     def table(self, name: str) -> FakePatchQuery:
-        assert name == "licenses"
+        assert name == "license_records"
         return self.query
 
 
@@ -129,7 +129,7 @@ class FakeDeleteClient:
         self.query = FakeDeleteQuery(FakeResponse(data))
 
     def table(self, name: str) -> FakeDeleteQuery:
-        assert name == "licenses"
+        assert name == "license_records"
         return self.query
 
 

@@ -41,15 +41,15 @@ def test_license_records_migration_keeps_records_private_to_the_server() -> None
     assert len(migrations) == 1
     migration = migrations[0].read_text(encoding="utf-8")
 
-    assert "create table license.licenses" in migration
-    assert "alter table license.licenses enable row level security;" in migration
+    assert "create table license.license_records" in migration
+    assert "alter table license.license_records enable row level security;" in migration
     assert "revoke usage on schema license from anon, authenticated;" in migration
     assert (
-        "revoke all privileges on table license.licenses from anon, authenticated;"
+        "revoke all privileges on table license.license_records from anon, authenticated;"
         in migration
     )
     assert (
-        "grant select, insert, update, delete on table license.licenses to service_role;"
+        "grant select, insert, update, delete on table license.license_records to service_role;"
         in migration
     )
     assert "total_seats >= 1" in migration

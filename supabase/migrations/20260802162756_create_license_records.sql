@@ -1,4 +1,4 @@
-create table license.licenses (
+create table license.license_records (
   id uuid primary key default gen_random_uuid(),
   product_name text not null check (char_length(btrim(product_name)) between 1 and 200),
   vendor text not null check (char_length(btrim(vendor)) between 1 and 200),
@@ -14,9 +14,9 @@ create table license.licenses (
   check (expires_at is null or start_date is null or expires_at >= start_date)
 );
 
-alter table license.licenses enable row level security;
+alter table license.license_records enable row level security;
 
 revoke usage on schema license from anon, authenticated;
 grant usage on schema license to service_role;
-revoke all privileges on table license.licenses from anon, authenticated;
-grant select, insert, update, delete on table license.licenses to service_role;
+revoke all privileges on table license.license_records from anon, authenticated;
+grant select, insert, update, delete on table license.license_records to service_role;

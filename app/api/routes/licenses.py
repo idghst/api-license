@@ -127,7 +127,7 @@ async def list_licenses(
 ) -> LicenseList:
     try:
         response = await (
-            client.table("licenses")
+            client.table("license_records")
             .select("*")
             .order("created_at", desc=True)
             .execute()
@@ -149,7 +149,7 @@ async def create_license(
 ) -> LicenseRecord:
     try:
         response = await (
-            client.table("licenses")
+            client.table("license_records")
             .insert(license_input.model_dump(mode="json"))
             .execute()
         )
@@ -173,7 +173,7 @@ async def get_license(
 ) -> LicenseRecord:
     try:
         response = await (
-            client.table("licenses")
+            client.table("license_records")
             .select("*")
             .eq("id", str(license_id))
             .limit(1)
@@ -210,7 +210,7 @@ async def update_license(
 ) -> LicenseRecord:
     try:
         existing_response = await (
-            client.table("licenses")
+            client.table("license_records")
             .select("*")
             .eq("id", str(license_id))
             .limit(1)
@@ -230,7 +230,10 @@ async def update_license(
 
     try:
         updated_response = await (
-            client.table("licenses").update(changes).eq("id", str(license_id)).execute()
+            client.table("license_records")
+            .update(changes)
+            .eq("id", str(license_id))
+            .execute()
         )
     except (APIError, httpx.HTTPError) as error:
         raise ApiError(
@@ -250,7 +253,7 @@ async def delete_license(
 ) -> Response:
     try:
         response = await (
-            client.table("licenses").delete().eq("id", str(license_id)).execute()
+            client.table("license_records").delete().eq("id", str(license_id)).execute()
         )
     except (APIError, httpx.HTTPError) as error:
         raise ApiError(

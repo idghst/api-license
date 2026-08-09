@@ -53,7 +53,7 @@ vercel dev
 
 1. Supabase Dashboard의 **API Settings → Exposed schemas**에 `license`를 추가합니다.
 2. 필요한 Preview/Production 프로젝트 각각에 migration을 적용합니다.
-3. `license.licenses` migration을 적용합니다. 이 테이블은 RLS를 켜고 `anon`·
+3. `license.license_records` migration을 적용합니다. 이 테이블은 RLS를 켜고 `anon`·
    `authenticated` 권한과 정책을 부여하지 않습니다. API의 서버 secret client만
    접근하며, `service_role`/secret key는 이 관리 CRUD 경로에서만 사용합니다.
 
