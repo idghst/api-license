@@ -222,6 +222,7 @@ def test_list_licenses_returns_admin_records_in_camel_case() -> None:
                 "partnershipContact": None,
                 "businessContact": None,
                 "contractContact": None,
+                "affiliate": None,
                 "licenseConfiguration": None,
                 "status": "active",
                 "memo": "Design team",
@@ -366,6 +367,7 @@ def test_create_license_persists_structured_contacts_and_configuration() -> None
                 "partnership_contact": "부산은행 정종원 대리",
                 "business_contact": "BNK시스템 표기동 매니저",
                 "contract_contact": "BNK시스템 이성욱 파트너",
+                "affiliate": "BNK금융그룹",
                 "license_configuration": "[내부망]\n- 디자이너: 20EA",
                 "status": "active",
                 "memo": None,
@@ -393,6 +395,7 @@ def test_create_license_persists_structured_contacts_and_configuration() -> None
             "partnershipContact": "부산은행 정종원 대리",
             "businessContact": "BNK시스템 표기동 매니저",
             "contractContact": "BNK시스템 이성욱 파트너",
+            "affiliate": "BNK금융그룹",
             "licenseConfiguration": "[내부망]\n- 디자이너: 20EA",
         },
     )
@@ -401,6 +404,7 @@ def test_create_license_persists_structured_contacts_and_configuration() -> None
     assert response.json()["partnershipContact"] == "부산은행 정종원 대리"
     assert response.json()["businessContact"] == "BNK시스템 표기동 매니저"
     assert response.json()["contractContact"] == "BNK시스템 이성욱 파트너"
+    assert response.json()["affiliate"] == "BNK금융그룹"
     assert response.json()["licenseConfiguration"] == "[내부망]\n- 디자이너: 20EA"
     assert admin_client.query.inserted == {
         "product_name": "Figma",
@@ -413,6 +417,7 @@ def test_create_license_persists_structured_contacts_and_configuration() -> None
         "partnership_contact": "부산은행 정종원 대리",
         "business_contact": "BNK시스템 표기동 매니저",
         "contract_contact": "BNK시스템 이성욱 파트너",
+        "affiliate": "BNK금융그룹",
         "license_configuration": "[내부망]\n- 디자이너: 20EA",
     }
 
@@ -592,7 +597,7 @@ def test_patch_license_validates_against_the_existing_record() -> None:
     assert isinstance(admin_client.query.updated["updated_at"], str)
 
 
-def test_patch_license_persists_a_structured_contact() -> None:
+def test_patch_license_persists_affiliate() -> None:
     from app.integrations.supabase import get_admin_client
 
     app = create_app(
@@ -619,7 +624,7 @@ def test_patch_license_persists_a_structured_contact() -> None:
     }
     updated = {
         **existing,
-        "contract_contact": "BNK시스템 이성욱 파트너",
+        "affiliate": "BNK금융그룹",
         "updated_at": "2026-02-01T00:00:00+00:00",
     }
     admin_client = FakePatchClient([existing], [updated])
@@ -631,13 +636,13 @@ def test_patch_license_persists_a_structured_contact() -> None:
     response = TestClient(app).patch(
         "/api/v1/licenses/f8f121d4-1f2f-4bd7-85fb-71543800bf0f",
         headers={"X-Admin-Key": "admin-test-key"},
-        json={"contractContact": "BNK시스템 이성욱 파트너"},
+        json={"affiliate": "BNK금융그룹"},
     )
 
     assert response.status_code == 200
-    assert response.json()["contractContact"] == "BNK시스템 이성욱 파트너"
+    assert response.json()["affiliate"] == "BNK금융그룹"
     assert admin_client.query.updated is not None
-    assert admin_client.query.updated["contract_contact"] == "BNK시스템 이성욱 파트너"
+    assert admin_client.query.updated["affiliate"] == "BNK금융그룹"
 
 
 def test_patch_license_rejects_manually_supplied_status() -> None:

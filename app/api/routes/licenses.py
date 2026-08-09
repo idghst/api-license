@@ -58,6 +58,7 @@ class LicenseRecord(BaseModel):
     partnership_contact: str | None = None
     business_contact: str | None = None
     contract_contact: str | None = None
+    affiliate: str | None = None
     license_configuration: str | None = None
     status: LicenseStatus
     memo: str | None
@@ -93,6 +94,7 @@ class LicenseCreate(BaseModel):
     partnership_contact: Annotated[str | None, Field(max_length=200)] = None
     business_contact: Annotated[str | None, Field(max_length=200)] = None
     contract_contact: Annotated[str | None, Field(max_length=200)] = None
+    affiliate: Annotated[str | None, Field(max_length=200)] = None
     license_configuration: Annotated[str | None, Field(max_length=5_000)] = None
     memo: Annotated[str | None, Field(max_length=5_000)] = None
 
@@ -123,6 +125,7 @@ class LicensePatch(BaseModel):
     partnership_contact: Annotated[str | None, Field(max_length=200)] = None
     business_contact: Annotated[str | None, Field(max_length=200)] = None
     contract_contact: Annotated[str | None, Field(max_length=200)] = None
+    affiliate: Annotated[str | None, Field(max_length=200)] = None
     license_configuration: Annotated[str | None, Field(max_length=5_000)] = None
     memo: Annotated[str | None, Field(max_length=5_000)] = None
 

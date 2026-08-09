@@ -76,3 +76,15 @@ def test_license_contacts_migration_extracts_legacy_memo_fields() -> None:
     assert r"\[계약 만료일\]" in migration
     assert r"\[라이선스 구성\]" in migration
     assert r"\[기존 상태 코드\]" in migration
+
+
+def test_license_affiliate_migration_keeps_the_field_optional_and_bounded() -> None:
+    migrations = sorted(
+        (PROJECT_ROOT / "supabase" / "migrations").glob("*_add_license_affiliate.sql")
+    )
+
+    assert len(migrations) == 1
+    migration = migrations[0].read_text(encoding="utf-8")
+
+    assert "add column affiliate text" in migration
+    assert "affiliate is null or char_length(affiliate) <= 200" in migration
