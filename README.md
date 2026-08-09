@@ -98,6 +98,7 @@ curl -i \
 | --- | --- | --- |
 | `GET` | `/api/v1/licenses` | `{ "items": [...], "count": n }` |
 | `POST` | `/api/v1/licenses` | 생성된 레코드 (`201`) |
+| `GET` | `/api/v1/licenses/{id}` | 단건 레코드 (`404` when missing) |
 | `PATCH` | `/api/v1/licenses/{id}` | 변경된 레코드 |
 | `DELETE` | `/api/v1/licenses/{id}` | `204 No Content` |
 

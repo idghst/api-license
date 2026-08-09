@@ -165,6 +165,30 @@ async def create_license(
     return LicenseRecord.model_validate(response.data[0])
 
 
+@router.get("/{license_id}", response_model=LicenseRecord)
+async def get_license(
+    license_id: UUID,
+    _: Annotated[None, Depends(require_admin_api_key)],
+    client: Annotated[AsyncClient, Depends(get_admin_client)],
+) -> LicenseRecord:
+    try:
+        response = await (
+            client.table("licenses")
+            .select("*")
+            .eq("id", str(license_id))
+            .limit(1)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError) as error:
+        raise ApiError(
+            503, "license_store_unavailable", "License storage is unavailable"
+        ) from error
+
+    if not response.data:
+        raise ApiError(404, "license_not_found", "License was not found")
+    return LicenseRecord.model_validate(response.data[0])
+
+
 def _validate_patch(existing: LicenseRecord, changes: dict[str, object]) -> None:
     merged = {
         field_name: getattr(existing, field_name)

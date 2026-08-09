@@ -23,6 +23,15 @@ class FakeSelectQuery:
         assert desc is True
         return self
 
+    def eq(self, column: str, value: str) -> "FakeSelectQuery":
+        assert column == "id"
+        assert value == "f8f121d4-1f2f-4bd7-85fb-71543800bf0f"
+        return self
+
+    def limit(self, count: int) -> "FakeSelectQuery":
+        assert count == 1
+        return self
+
     async def execute(self) -> FakeResponse:
         return self.response
 
@@ -217,6 +226,50 @@ def test_list_licenses_returns_admin_records_in_camel_case() -> None:
         ],
         "count": 1,
     }
+
+
+def test_get_license_returns_one_admin_record_in_camel_case() -> None:
+    from app.integrations.supabase import get_admin_client
+
+    app = create_app(
+        Settings(
+            SUPABASE_URL="https://test.supabase.co",
+            SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+            SUPABASE_SECRET_KEY="sb_secret_test",
+            ADMIN_API_KEY="admin-test-key",
+        )
+    )
+    admin_client = FakeAdminClient(
+        [
+            {
+                "id": "f8f121d4-1f2f-4bd7-85fb-71543800bf0f",
+                "product_name": "Figma",
+                "vendor": "Figma, Inc.",
+                "total_seats": 12,
+                "used_seats": 8,
+                "start_date": "2026-01-01",
+                "expires_at": "2027-01-01",
+                "renewal_date": "2026-12-15",
+                "status": "active",
+                "memo": "Design team",
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-02T00:00:00+00:00",
+            }
+        ]
+    )
+
+    async def provide_admin_client():
+        yield admin_client
+
+    app.dependency_overrides[get_admin_client] = provide_admin_client
+    response = TestClient(app).get(
+        "/api/v1/licenses/f8f121d4-1f2f-4bd7-85fb-71543800bf0f",
+        headers={"X-Admin-Key": "admin-test-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "f8f121d4-1f2f-4bd7-85fb-71543800bf0f"
+    assert response.json()["productName"] == "Figma"
 
 
 def test_create_license_persists_a_validated_record() -> None:
