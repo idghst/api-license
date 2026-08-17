@@ -1,9 +1,10 @@
+import hmac
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Annotated
 
 import httpx
-from fastapi import Depends
+from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from supabase_auth.errors import AuthApiError, AuthRetryableError, AuthUnknownError
 from supabase_auth.types import User
@@ -86,6 +87,27 @@ async def get_auth_context(
         yield AuthContext(user=response.user, client=client)
     finally:
         await http_client.aclose()
+
+
+def require_admin_api_key(
+    settings: Annotated[Settings, Depends(get_settings)],
+    x_admin_key: Annotated[str | None, Header()] = None,
+) -> None:
+    if settings.ADMIN_API_KEY is None:
+        raise ApiError(
+            503,
+            "administrator_authentication_unavailable",
+            "Administrator authentication is unavailable",
+        )
+
+    if x_admin_key is None or not hmac.compare_digest(
+        x_admin_key, settings.ADMIN_API_KEY.get_secret_value()
+    ):
+        raise ApiError(
+            401,
+            "administrator_authentication_required",
+            "Valid X-Admin-Key is required",
+        )
 
 
 async def get_admin_client(

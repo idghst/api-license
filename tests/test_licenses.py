@@ -902,3 +902,64 @@ def test_delete_license_returns_404_when_no_record_is_deleted() -> None:
         "message": "License was not found",
         "request_id": "req-delete-404",
     }
+
+
+def test_get_license_returns_404_when_no_record_exists() -> None:
+    from app.integrations.supabase import get_admin_client
+
+    app = create_app(
+        Settings(
+            SUPABASE_URL="https://test.supabase.co",
+            SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+            SUPABASE_SECRET_KEY="sb_secret_test",
+            ADMIN_API_KEY="admin-test-key",
+        )
+    )
+    admin_client = FakeAdminClient([])
+
+    async def provide_admin_client():
+        yield admin_client
+
+    app.dependency_overrides[get_admin_client] = provide_admin_client
+    response = TestClient(app).get(
+        "/api/v1/licenses/f8f121d4-1f2f-4bd7-85fb-71543800bf0f",
+        headers={"X-Admin-Key": "admin-test-key", "X-Request-ID": "req-get-404"},
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "code": "license_not_found",
+        "message": "License was not found",
+        "request_id": "req-get-404",
+    }
+
+
+def test_create_license_maps_empty_insert_to_unavailable() -> None:
+    from app.integrations.supabase import get_admin_client
+
+    app = create_app(
+        Settings(
+            SUPABASE_URL="https://test.supabase.co",
+            SUPABASE_PUBLISHABLE_KEY="sb_publishable_test",
+            SUPABASE_SECRET_KEY="sb_secret_test",
+            ADMIN_API_KEY="admin-test-key",
+        )
+    )
+    admin_client = FakeInsertClient([])
+
+    async def provide_admin_client():
+        yield admin_client
+
+    app.dependency_overrides[get_admin_client] = provide_admin_client
+    response = TestClient(app).post(
+        "/api/v1/licenses",
+        headers={"X-Admin-Key": "admin-test-key", "X-Request-ID": "req-create-empty"},
+        json=valid_license_payload(),
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "code": "license_store_unavailable",
+        "message": "License storage is unavailable",
+        "request_id": "req-create-empty",
+    }
