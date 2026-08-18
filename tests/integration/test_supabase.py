@@ -1,74 +1,145 @@
 import os
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
 
 from app.core.config import Settings
 from app.main import create_app
 
 pytestmark = pytest.mark.integration
 
-_SKIP_MESSAGE = "Supabase integration credentials are not set"
+_CREDENTIALS_SKIP_MESSAGE = "Supabase integration credentials are not set"
+_CREDENTIAL_ENV_NAMES = (
+    "SUPABASE_TEST_URL",
+    "SUPABASE_TEST_PUBLISHABLE_KEY",
+    "SUPABASE_TEST_ACCESS_TOKEN",
+)
 
 
-@pytest.fixture(scope="module")
-def live_settings() -> tuple[Settings, str]:
-    url = os.getenv("SUPABASE_URL")
-    publishable_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
-    access_token = os.getenv("SUPABASE_TEST_ACCESS_TOKEN")
-    if not all((url, publishable_key, access_token)) or (
-        url == "https://test.supabase.co" and publishable_key == "sb_publishable_test"
-    ):
-        pytest.skip(_SKIP_MESSAGE)
+@dataclass(frozen=True)
+class IntegrationCredentials:
+    url: str
+    publishable_key: str
+    access_token: str
 
-    return (
-        Settings(
-            SUPABASE_URL=url,
-            SUPABASE_PUBLISHABLE_KEY=SecretStr(publishable_key),
-        ),
-        access_token,
+
+def load_integration_credentials() -> IntegrationCredentials:
+    values = {name: os.getenv(name, "").strip() for name in _CREDENTIAL_ENV_NAMES}
+    if not all(values.values()):
+        pytest.skip(_CREDENTIALS_SKIP_MESSAGE)
+    return IntegrationCredentials(
+        url=values["SUPABASE_TEST_URL"].rstrip("/"),
+        publishable_key=values["SUPABASE_TEST_PUBLISHABLE_KEY"],
+        access_token=values["SUPABASE_TEST_ACCESS_TOKEN"],
     )
 
 
-def test_auth_health_endpoint_is_available(live_settings: tuple[Settings, str]) -> None:
-    settings, _ = live_settings
+@pytest.fixture(scope="session")
+def credentials() -> IntegrationCredentials:
+    return load_integration_credentials()
 
+
+def test_initial_migration_creates_only_license_schema_contract() -> None:
+    migration = next(
+        (Path(__file__).parents[2] / "supabase" / "migrations").glob(
+            "*_init_license.sql"
+        )
+    )
+
+    assert (
+        migration.read_text()
+        == """create schema if not exists license;
+
+grant usage on schema license to anon, authenticated, service_role;
+
+alter default privileges in schema license
+  grant all on tables to service_role;
+
+alter default privileges in schema license
+  grant all on sequences to service_role;
+
+alter default privileges in schema license
+  grant execute on routines to service_role;
+"""
+    )
+
+
+def test_local_data_api_exposes_license_schema() -> None:
+    config = Path(__file__).parents[2] / "supabase" / "config.toml"
+
+    assert 'schemas = ["public", "graphql_public", "license"]' in config.read_text()
+
+
+def test_local_supabase_project_id_is_unique_to_license_service() -> None:
+    config = Path(__file__).parents[2] / "supabase" / "config.toml"
+
+    with config.open("rb") as config_file:
+        assert tomllib.load(config_file)["project_id"] == "fastapi-license"
+
+
+@pytest.mark.parametrize("missing_name", _CREDENTIAL_ENV_NAMES)
+@pytest.mark.parametrize("missing_value", [None, "", " \t "])
+def test_integration_credential_gate_rejects_unset_empty_and_whitespace_values(
+    monkeypatch: pytest.MonkeyPatch, missing_name: str, missing_value: str | None
+) -> None:
+    for name in _CREDENTIAL_ENV_NAMES:
+        monkeypatch.setenv(name, "value")
+    if missing_value is None:
+        monkeypatch.delenv(missing_name)
+    else:
+        monkeypatch.setenv(missing_name, missing_value)
+
+    def unexpected_network(*_: object, **__: object) -> None:
+        pytest.fail("credential gate attempted a live network call")
+
+    monkeypatch.setattr(httpx, "get", unexpected_network)
+
+    with pytest.raises(pytest.skip.Exception, match=_CREDENTIALS_SKIP_MESSAGE):
+        load_integration_credentials()
+
+
+def test_auth_health_endpoint(credentials: IntegrationCredentials) -> None:
     response = httpx.get(
-        f"{str(settings.SUPABASE_URL).rstrip('/')}/auth/v1/health",
-        headers={"apikey": settings.SUPABASE_PUBLISHABLE_KEY.get_secret_value()},
-        timeout=settings.SUPABASE_TIMEOUT_SECONDS,
+        f"{credentials.url}/auth/v1/health",
+        headers={"apikey": credentials.publishable_key},
+        timeout=5.0,
     )
 
-    assert 200 <= response.status_code < 300
+    assert response.is_success, response.text
 
 
-def test_me_accepts_a_real_access_token(live_settings: tuple[Settings, str]) -> None:
-    settings, access_token = live_settings
-
-    response = TestClient(create_app(settings)).get(
-        "/api/v1/auth/me",
-        headers={"Authorization": f"Bearer {access_token}"},
+def test_verified_access_token_reaches_auth_me(
+    credentials: IntegrationCredentials,
+) -> None:
+    settings = Settings(
+        SUPABASE_URL=credentials.url,
+        SUPABASE_PUBLISHABLE_KEY=credentials.publishable_key,
     )
+    with TestClient(create_app(settings)) as client:
+        response = client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {credentials.access_token}"},
+        )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     assert response.json()["id"]
 
 
-def test_license_schema_is_exposed_to_data_api(
-    live_settings: tuple[Settings, str],
+def test_data_api_accepts_license_schema_profile(
+    credentials: IntegrationCredentials,
 ) -> None:
-    settings, access_token = live_settings
-
     response = httpx.get(
-        f"{str(settings.SUPABASE_URL).rstrip('/')}/rest/v1/",
+        f"{credentials.url}/rest/v1/",
         headers={
-            "apikey": settings.SUPABASE_PUBLISHABLE_KEY.get_secret_value(),
-            "Authorization": f"Bearer {access_token}",
+            "apikey": credentials.publishable_key,
+            "Authorization": f"Bearer {credentials.access_token}",
             "Accept-Profile": "license",
         },
-        timeout=settings.SUPABASE_TIMEOUT_SECONDS,
+        timeout=5.0,
     )
 
-    assert 200 <= response.status_code < 300, response.text
+    assert response.is_success, response.text

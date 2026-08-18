@@ -38,7 +38,11 @@ class AuthMeOut(BaseModel):
 
 
 class LicenseRecord(BaseModel):
-    model_config = ConfigDict(alias_generator=_camel_case, populate_by_name=True)
+    model_config = ConfigDict(
+        alias_generator=_camel_case,
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     id: UUID
     product_name: str

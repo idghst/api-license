@@ -6,27 +6,7 @@ from pydantic import SecretStr
 
 from app.core.config import Settings, get_settings
 from app.core.errors import ApiError
-from app.main import app, create_app
-
-
-def test_liveness_returns_ok() -> None:
-    response = TestClient(app).get("/health/live")
-
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
-
-
-def test_factory_uses_supplied_settings_and_root_message() -> None:
-    settings = Settings(
-        SUPABASE_URL="https://test.supabase.co",
-        SUPABASE_PUBLISHABLE_KEY=SecretStr("sb_publishable_test"),
-    )
-    configured_app = create_app(settings)
-
-    assert configured_app.dependency_overrides[get_settings]() is settings
-    response = TestClient(configured_app).get("/")
-    assert response.status_code == 200
-    assert response.json() == {"message": "License API"}
+from app.main import create_app
 
 
 @pytest.fixture
@@ -34,29 +14,35 @@ def settings() -> Settings:
     return Settings(
         SUPABASE_URL="https://test.supabase.co",
         SUPABASE_PUBLISHABLE_KEY=SecretStr("sb_publishable_test"),
-        SUPABASE_TIMEOUT_SECONDS=2.5,
     )
 
 
 @pytest.fixture
-def configured_app(settings: Settings) -> FastAPI:
+def app(settings: Settings) -> FastAPI:
     return create_app(settings)
 
 
 @pytest.fixture
-def client(configured_app: FastAPI) -> TestClient:
-    return TestClient(configured_app)
+def client(app: FastAPI) -> TestClient:
+    return TestClient(app)
+
+
+def test_liveness_returns_ok(client: TestClient) -> None:
+    response = client.get("/health/live")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
 
 
 def test_readiness_maps_unavailable_dependency_to_sanitized_503(
-    client: TestClient, configured_app: FastAPI
+    client: TestClient, app: FastAPI
 ) -> None:
     from app.api.routes.health import probe_supabase
 
     async def unavailable() -> None:
         raise ApiError(503, "dependency_unavailable", "Supabase is unavailable")
 
-    configured_app.dependency_overrides[probe_supabase] = unavailable
+    app.dependency_overrides[probe_supabase] = unavailable
 
     response = client.get("/health/ready", headers={"X-Request-ID": "req-ready"})
 
@@ -87,7 +73,7 @@ def test_readiness_probes_auth_health_with_publishable_key_and_timeout(
     assert observed == {
         "url": "https://test.supabase.co/auth/v1/health",
         "headers": {"apikey": "sb_publishable_test"},
-        "timeout": 2.5,
+        "timeout": 5.0,
     }
 
 
@@ -120,15 +106,28 @@ def test_probe_supabase_sanitizes_upstream_failures(
     assert caught.value.message == "Supabase is unavailable"
 
 
-def test_production_disables_docs_and_openapi() -> None:
-    configured_app = create_app(
+def test_factory_injects_supplied_settings_and_root_message(
+    app: FastAPI, client: TestClient, settings: Settings
+) -> None:
+    assert app.state.settings is settings
+    assert app.dependency_overrides[get_settings]() is settings
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.json() == {"message": "License API"}
+
+
+def test_production_host_disables_docs_and_openapi() -> None:
+    app = create_app(
         Settings(
-            APP_ENV="production",
-            SUPABASE_URL="https://test.supabase.co",
+            SUPABASE_URL="https://example.supabase.co",
             SUPABASE_PUBLISHABLE_KEY=SecretStr("sb_publishable_test"),
+            SUPABASE_SECRET_KEY=SecretStr("sb_secret_test"),
+            ADMIN_API_KEY=SecretStr("administrator-secret"),
         )
     )
-    client = TestClient(configured_app)
+    client = TestClient(app, base_url="http://api.example.com")
 
     for path in ("/docs", "/redoc", "/openapi.json"):
         response = client.get(path, headers={"X-Request-ID": "req-docs"})
@@ -141,14 +140,55 @@ def test_production_disables_docs_and_openapi() -> None:
         }
 
 
+def test_localhost_and_test_hosts_expose_docs(settings: Settings) -> None:
+    app = create_app(settings)
+    for base_url in ("http://localhost:8000", "http://testserver"):
+        client = TestClient(app, base_url=base_url)
+        assert client.get("/openapi.json").status_code == 200
+        assert client.get("/docs").status_code == 200
+
+
+def test_production_host_without_admin_credentials_returns_503() -> None:
+    app = create_app(
+        Settings(
+            SUPABASE_URL="https://example.supabase.co",
+            SUPABASE_PUBLISHABLE_KEY=SecretStr("sb_publishable_test"),
+        )
+    )
+    client = TestClient(app, base_url="http://api.example.com")
+
+    live = client.get("/health/live")
+    root = client.get("/")
+
+    assert live.status_code == 200
+    assert root.status_code == 503
+    assert root.json()["code"] == "administrator_authentication_unavailable"
+
+
+def test_production_host_rejects_http_supabase_url() -> None:
+    app = create_app(
+        Settings(
+            SUPABASE_URL="http://localhost:54321",
+            SUPABASE_PUBLISHABLE_KEY=SecretStr("sb_publishable_test"),
+            SUPABASE_SECRET_KEY=SecretStr("sb_secret_test"),
+            ADMIN_API_KEY=SecretStr("administrator-secret"),
+        )
+    )
+    client = TestClient(app, base_url="http://api.example.com")
+
+    response = client.get("/")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "dependency_unavailable"
+
+
 def test_cors_allows_only_configured_origin(settings: Settings) -> None:
-    settings.CORS_ORIGINS = ["https://app.example.com"]
     client = TestClient(create_app(settings))
 
     allowed = client.options(
         "/health/live",
         headers={
-            "Origin": "https://app.example.com",
+            "Origin": "http://localhost:3000",
             "Access-Control-Request-Method": "GET",
         },
     )
@@ -160,18 +200,17 @@ def test_cors_allows_only_configured_origin(settings: Settings) -> None:
         },
     )
 
-    assert allowed.headers["access-control-allow-origin"] == "https://app.example.com"
+    assert allowed.headers["access-control-allow-origin"] == "http://localhost:3000"
     assert denied.status_code == 400
 
 
 def test_cors_allows_the_admin_key_header(settings: Settings) -> None:
-    settings.CORS_ORIGINS = ["https://app.example.com"]
     client = TestClient(create_app(settings))
 
     response = client.options(
         "/api/v1/licenses",
         headers={
-            "Origin": "https://app.example.com",
+            "Origin": "http://localhost:3000",
             "Access-Control-Request-Method": "GET",
             "Access-Control-Request-Headers": "X-Admin-Key",
         },

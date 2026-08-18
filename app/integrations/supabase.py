@@ -1,6 +1,6 @@
-import hmac
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from secrets import compare_digest
 from typing import Annotated
 
 import httpx
@@ -100,7 +100,7 @@ def require_admin_api_key(
             "Administrator authentication is unavailable",
         )
 
-    if x_admin_key is None or not hmac.compare_digest(
+    if x_admin_key is None or not compare_digest(
         x_admin_key, settings.ADMIN_API_KEY.get_secret_value()
     ):
         raise ApiError(

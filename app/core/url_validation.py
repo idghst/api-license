@@ -44,6 +44,8 @@ def has_valid_host(host: str | None) -> bool:
 
 
 def require_http_origin(value: object, *, allow_root_path: bool) -> str:
+    if isinstance(value, AnyHttpUrl):
+        value = str(value)
     if (
         not isinstance(value, str)
         or not value
